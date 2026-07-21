@@ -62,6 +62,10 @@
    
 
 ### ขั้นที่ 2 — สร้างไฟล์โค้ด (copy จาก `code-gscripts/`)
+
+- Clone Project บน github หรือ Download  (git clone https://github.com/tontheonelove/stock-management-g-script.git)
+- จะได้ Folder มี Code ของ Google script ทั้งหมดอยู่ที่ /stock-management-g-script/code-gscripts
+
 ใน Apps Script Editor ให้สร้างไฟล์ **ให้ตรงชื่อนี้** (ลบ `Code.gs` หรือ `รหัส.gs` เดิมที่ Google สร้างให้ แล้ววางโค้ดใหม่):
 
 > ⚠️ **สำคัญ:** ตอนสร้าง HTML file ใน Editor **พิมพ์แค่ `index` / `style` / `script`** (ไม่ต้องพิมพ์ `.html` — Editor เติมให้เอง) และเนื้อหาในไฟล์ `.html` ของ repo คือ **ทั้งหมด** ที่ต้องวางลง (รวมแท็ก `<style>`/`<script>` ข้างในด้วย)
@@ -69,20 +73,20 @@
 **Script files (กด `+` ข้าง Files → Script):**
 | ชื่อไฟล์ใน Editor | copy จาก |
 |---|---|
-| `Code` | `code-gscripts//Code.gs` |
-| `Database` | `code-gscripts//Database.gs` |
-| `Auth` | `code-gscripts//Auth.gs` |
-| `ProductService` | `code-gscripts//ProductService.gs` |
-| `StockService` | `code-gscripts//StockService.gs` |
-| `SettingsService` | `code-gscripts//SettingsService.gs` |
-| `ReportService` | `code-gscripts//ReportService.gs` |
+| `Code` | `code-gscripts/Code.gs` |
+| `Database` | `code-gscripts/Database.gs` |
+| `Auth` | `code-gscripts/Auth.gs` |
+| `ProductService` | `code-gscripts/ProductService.gs` |
+| `StockService` | `code-gscripts/StockService.gs` |
+| `SettingsService` | `code-gscripts/SettingsService.gs` |
+| `ReportService` | `code-gscripts/ReportService.gs` |
 
 **HTML files (กด `+` ข้าง Files → HTML):**
 | ชื่อไฟล์ใน Editor | copy จาก |
 |---|---|
-| `index` | `code-gscripts//index.html` |
-| `style` | `code-gscripts//style.html` |
-| `script` | `code-gscripts//script.html` |
+| `index` | `code-gscripts/index.html` |
+| `style` | `code-gscripts/style.html` |
+| `script` | `code-gscripts/script.html` |
 
 
 
