@@ -108,7 +108,7 @@
 ### ขั้นที่ 3 — สร้างฐานข้อมูล (รันครั้งเดียว)
 1. ที่แถบด้านบน เลือกฟังก์ชัน **`setupDatabase`** → กด **▶ Run**
 
-   ![รัน setupDatabase](docs/screenshots/sc6.png)
+   ![รัน setupDatabase](docs/screenshots/sc55.png)
 
 2. Google ขออนุญาตสิทธิ์ → **Review permissions** → เลือกบัญชี → ถ้าขึ้น *"This app isn't verified"* กด **Advanced** → **Go to (unsafe)** → **Allow**
 
