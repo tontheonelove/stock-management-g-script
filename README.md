@@ -99,6 +99,10 @@
 
 ![ตัวอย่าง](docs/screenshots/sc5.png)
 
+## หาก copy code วางทั้งหมดเช็คให้ครบก่อน Deploy  ตัวอย่างด้านล่าง
+
+   ![ตัวอย่าง](docs/screenshots/ff.png)
+
 
 
 ### ขั้นที่ 3 — สร้างฐานข้อมูล (รันครั้งเดียว)
@@ -125,7 +129,7 @@
    ![Deploy settings](docs/screenshots/de2.png)
 
 
-5. คัดลอก **Web app URL**
+5. คัดลอก **Web app URL** เก็บไว้ ใน notepad ก่อนก็ได้ เพื่อเราจะเอาURLนี้ไปเปิดเรียกใช้งานโปรแกรม
 
    ![Web app URL](docs/screenshots/de4.png)
 
@@ -139,7 +143,7 @@ Password : admin123
 
 ---
 
-## 🔄 การอัพเดทโค้ด (หลังแก้)
+## 🔄 การอัพเดทโค้ด (หลังแก้) ถ้าไม่มีการแก้ไข code หลัง deploy รอบแรก ไม่ต้องสนใจขั้นตอนนี้
 
 แก้โค้ดใน Apps Script Editor → Save → แล้ว **ต้อง Deploy เวอร์ชันใหม่**:
 > **Deploy → Manage deployments → ✏️ → Version: `New version` → Deploy**
