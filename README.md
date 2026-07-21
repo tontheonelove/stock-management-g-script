@@ -42,17 +42,6 @@
 
 ---
 
-## ⚠️ อ่านก่อน: GAS "ไม่เหมือน" Python / Next.js
-
-ถ้าคุณคุ้นกับการ `git clone` → `pip install` / `npm install` → `run` — **GAS ทำแบบนั้นไม่ได้** เพราะโค้ด GAS รันบน **Google Cloud ของคุณ** ไม่ใช่เครื่องคุณ
-
-ดังนั้นขั้นตอนติดตั้งจะเป็น:
-> **สร้าง Spreadsheet → เปิด Apps Script Editor (GUI) → สร้างไฟล์ + copy โค้ดจาก `src/` → รัน setup → Deploy**
-
-ฟังดูเยอะ แต่จริงๆ **~5-10 นาที** และทำครั้งเดียวครับ 👇 (มีรูปประกอบทุกขั้น)
-
----
-
 ## 🚀 Quick Start (ติดตั้งครั้งแรก)
 
 ### สิ่งที่จำเป็น
@@ -63,31 +52,33 @@
 1. สร้าง Google Spreadsheet ใหม่ (ชื่ออะไรก็ได้)
 2. เมนู **Extensions (ส่วนเสริม)** → **Apps Script**
 
-   ![เปิด Apps Script](docs/screenshots/03-extensions-menu.png)
+   ![เปิด Apps Script](docs/screenshots/sh1.png)
    *เมนู Extensions → Apps Script*
 
-### ขั้นที่ 2 — สร้างไฟล์โค้ด (copy จาก `src/`)
-ใน Apps Script Editor ให้สร้างไฟล์ **ให้ตรงชื่อนี้** (ลบ `Code.gs` เดิมที่ Google สร้างให้ แล้ววางโค้ดใหม่):
+### ขั้นที่ 2 — สร้างไฟล์โค้ด (copy จาก `code-gscripts/`)
+ใน Apps Script Editor ให้สร้างไฟล์ **ให้ตรงชื่อนี้** (ลบ `Code.gs` หรือ `รหัส.gs` เดิมที่ Google สร้างให้ แล้ววางโค้ดใหม่):
+
+> ⚠️ **สำคัญ:** ตอนสร้าง HTML file ใน Editor **พิมพ์แค่ `index` / `style` / `script`** (ไม่ต้องพิมพ์ `.html` — Editor เติมให้เอง) และเนื้อหาในไฟล์ `.html` ของ repo คือ **ทั้งหมด** ที่ต้องวางลง (รวมแท็ก `<style>`/`<script>` ข้างในด้วย)
 
 **Script files (กด `+` ข้าง Files → Script):**
 | ชื่อไฟล์ใน Editor | copy จาก |
 |---|---|
-| `Code` | `src/Code.gs` |
-| `Database` | `src/Database.gs` |
-| `Auth` | `src/Auth.gs` |
-| `ProductService` | `src/ProductService.gs` |
-| `StockService` | `src/StockService.gs` |
-| `SettingsService` | `src/SettingsService.gs` |
-| `ReportService` | `src/ReportService.gs` |
+| `Code` | `code-gscripts//Code.gs` |
+| `Database` | `code-gscripts//Database.gs` |
+| `Auth` | `code-gscripts//Auth.gs` |
+| `ProductService` | `code-gscripts//ProductService.gs` |
+| `StockService` | `code-gscripts//StockService.gs` |
+| `SettingsService` | `code-gscripts//SettingsService.gs` |
+| `ReportService` | `code-gscripts//ReportService.gs` |
 
 **HTML files (กด `+` ข้าง Files → HTML):**
 | ชื่อไฟล์ใน Editor | copy จาก |
 |---|---|
-| `index` | `src/index.html` |
-| `style` | `src/style.html` |
-| `script` | `src/script.html` |
+| `index` | `code-gscripts//index.html` |
+| `style` | `code-gscripts//style.html` |
+| `script` | `code-gscripts//script.html` |
 
-> ⚠️ **สำคัญ:** ตอนสร้าง HTML file ใน Editor **พิมพ์แค่ `index` / `style` / `script`** (ไม่ต้องพิมพ์ `.html` — Editor เติมให้เอง) และเนื้อหาในไฟล์ `.html` ของ repo คือ **ทั้งหมด** ที่ต้องวางลง (รวมแท็ก `<style>`/`<script>` ข้างในด้วย)
+
 
 ### ขั้นที่ 3 — สร้างฐานข้อมูล (รันครั้งเดียว)
 1. ที่แถบด้านบน เลือกฟังก์ชัน **`setupDatabase`** → กด **▶ Run**
