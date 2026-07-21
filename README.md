@@ -49,10 +49,13 @@
 - เบราว์เซอร์ (Chrome / Edge แนะนำ)
 
 ### ขั้นที่ 1 — สร้าง Spreadsheet + เปิด Apps Script
+
 1. สร้าง Google Spreadsheet ใหม่ (ชื่ออะไรก็ได้)
+
    ![เปิด แก้ไขชื่อ sheet เป็นของคุณ](docs/screenshots/sh1.png)
 
 2. เมนู **Extensions (ส่วนเสริม)** → **Apps Script**
+
    ![เปิด Apps Script](docs/screenshots/sh2.png)
    *เมนู Extensions → Apps Script*
 
