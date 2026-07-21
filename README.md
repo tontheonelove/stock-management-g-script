@@ -63,7 +63,7 @@
 
 ### ขั้นที่ 2 — สร้างไฟล์โค้ด (copy จาก `code-gscripts/`)
 
-- Clone Project บน github หรือ Download  (git clone https://github.com/tontheonelove/stock-management-g-script.git)
+- Clone Project บน github หรือ Download  (`git clone https://github.com/tontheonelove/stock-management-g-script.git`)
 - จะได้ Folder มี Code ของ Google script ทั้งหมดอยู่ที่ /stock-management-g-script/code-gscripts
 
 ใน Apps Script Editor ให้สร้างไฟล์ **ให้ตรงชื่อนี้** (ลบ `Code.gs` หรือ `รหัส.gs` เดิมที่ Google สร้างให้ แล้ววางโค้ดใหม่):
