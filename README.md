@@ -34,11 +34,11 @@
 
 | Login | Dashboard |
 |:---:|:---:|
-| ![Login](docs/screenshots/01-login.png) | ![Dashboard](docs/screenshots/02-dashboard.png) |
+| ![Login](docs/screenshots/ui1.png) | ![Dashboard](docs/screenshots/dashboard.png) |
 
 | จัดการสินค้า | เคลื่อนไหวสต็อก |
 |:---:|:---:|
-| ![Products](docs/screenshots/03-products.png) | ![Stock Movement](docs/screenshots/04-stock.png) |
+| ![Products](docs/screenshots/ui3.png) | ![Stock Movement](docs/screenshots/ui4.png) |
 
 ---
 
