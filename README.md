@@ -59,6 +59,10 @@
    ![เปิด Apps Script](docs/screenshots/sh2.png)
    *เมนู Extensions → Apps Script*
 
+3. ระบบจะ redirect ไปยัง google script  ให้ตั้งชื่อโปรเจค 
+
+   ![ตั้งชื่อโปรเจค](docs/screenshots/sc1.png)
+
    
 
 ### ขั้นที่ 2 — สร้างไฟล์โค้ด (copy จาก `code-gscripts/`)
@@ -89,9 +93,18 @@
 | `script` | `code-gscripts/script.html` |
 
 
+![ตัวอย่าง](docs/screenshots/sc3.png)
+
+- อย่าลืมบันทึกให้ครบทุกไฟล์ โดยกด ctrl + s  หรือ ปุ่ม save 
+
+![ตัวอย่าง](docs/screenshots/sc5.png)
+
+
 
 ### ขั้นที่ 3 — สร้างฐานข้อมูล (รันครั้งเดียว)
 1. ที่แถบด้านบน เลือกฟังก์ชัน **`setupDatabase`** → กด **▶ Run**
+
+![ตัวอย่าง](docs/screenshots/sc3.png)
 
    ![รัน setupDatabase](docs/screenshots/04-run-setup.png)
 2. Google ขออนุญาตสิทธิ์ → **Review permissions** → เลือกบัญชี → ถ้าขึ้น *"This app isn't verified"* กด **Advanced** → **Go to (unsafe)** → **Allow**
