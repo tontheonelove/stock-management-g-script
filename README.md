@@ -104,12 +104,11 @@
 ### ขั้นที่ 3 — สร้างฐานข้อมูล (รันครั้งเดียว)
 1. ที่แถบด้านบน เลือกฟังก์ชัน **`setupDatabase`** → กด **▶ Run**
 
-![ตัวอย่าง](docs/screenshots/sc3.png)
+   ![รัน setupDatabase](docs/screenshots/sc6.png)
 
-   ![รัน setupDatabase](docs/screenshots/04-run-setup.png)
 2. Google ขออนุญาตสิทธิ์ → **Review permissions** → เลือกบัญชี → ถ้าขึ้น *"This app isn't verified"* กด **Advanced** → **Go to (unsafe)** → **Allow**
 
-   ![Authorize](docs/screenshots/05-authorize.png)
+   ![Authorize](docs/screenshots/sc8.png)
    *คำเตือนนี้ปกติ เพราะเป็นสคริปต์ที่เราเขียนเอง*
 3. รอจนขึ้น popup **"Setup สำเร็จ! ✅"** → กลับไปดู Spreadsheet จะเห็น 4 ชีต: `Users`, `Products`, `Transactions`, `Settings`
 
@@ -121,10 +120,14 @@
    - **Who has access:** `Anyone with Google account`
 4. กด **Deploy** → **Authorize** (ถ้าถาม)
 
-   ![Deploy settings](docs/screenshots/06-deploy-settings.png)
+   ![Deploy settings](docs/screenshots/de1.png)
+
+   ![Deploy settings](docs/screenshots/de2.png)
+
+
 5. คัดลอก **Web app URL**
 
-   ![Web app URL](docs/screenshots/07-webapp-url.png)
+   ![Web app URL](docs/screenshots/de4.png)
 
 ### ขั้นที่ 5 — เปิดใช้งาน 🎉
 เปิด Web app URL → Login ด้วยบัญชีเริ่มต้น:
@@ -133,26 +136,6 @@ Username : admin
 Password : admin123
 ```
 > 🚨 **เปลี่ยนรหัส `admin` ทันที** หลังเข้าครั้งแรก (เมนู ผู้ใช้งาน → แก้ไข)
-
----
-
-## 🛠️ สำหรับ Developer: ใช้ `clasp` (dev แบบ local + git)
-
-ถ้าคุณอยาก dev บนเครื่องด้วย VS Code + push/pull ผ่าน git (เหมือนโปรเจคปกติ) — Google มี CLI ชื่อ **[`clasp`](https://github.com/google/clasp)** ครับ
-
-```bash
-npm install -g @google/clasp
-clasp login                       # login Google (เปิดเบราว์เซอร์)
-clasp clone <scriptId>            # clone project ที่มีอยู่ลงเครื่อง
-# หรือ
-clasp create --type standalone    # สร้าง project ใหม่
-clasp push                        # push โค้ดจากเครื่อง → GAS
-clasp open                        # เปิด Editor บนเว็บ
-```
-
-> 📌 repo นี้มี `.clasp.json.example` — ให้ copy เป็น `.clasp.json` แล้วใส่ `scriptId` ของคุณ (ได้จากการรัน `clasp create` หรือดูจาก URL ของ Apps Script project)
->
-> ⚠️ `.clasp.json` มี `scriptId` เฉพาะคน → **อย่า commit** (มีใน `.gitignore` แล้ว)
 
 ---
 
