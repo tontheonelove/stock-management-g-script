@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Stock Management System</title>
+
+  <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <?!= include('style'); ?>
+</head>
+<body>
+
+  <!-- LOADING OVERLAY -->
+  <div id="loadingOverlay" class="loading-overlay" style="display: none;">
+    <div class="loading-content">
+      <div class="loading-spinner"></div>
+      <p class="loading-text">กำลังประมวลผล...</p>
+    </div>
+  </div>
+
+  <!-- LOGIN VIEW -->
+  <div id="loginView" class="login-container">
+    <div class="login-bg-shapes">
+      <div class="shape shape-1"></div><div class="shape shape-2"></div>
+      <div class="shape shape-3"></div><div class="shape shape-4"></div>
+    </div>
+    <div class="login-card" id="loginCard">
+      <div class="login-logo"><i class="fas fa-boxes-stacked"></i></div>
+      <h1 class="login-title">Stock Management</h1>
+      <p class="login-subtitle">ระบบจัดการสต็อกสินค้า</p>
+      <form id="loginForm" onsubmit="return false;">
+        <div class="input-group">
+          <div class="input-icon"><i class="fas fa-user"></i></div>
+          <input type="text" id="loginUsername" class="input-field" placeholder="ชื่อผู้ใช้ (Username)" autocomplete="username" required>
+        </div>
+        <div class="input-group">
+          <div class="input-icon"><i class="fas fa-lock"></i></div>
+          <input type="password" id="loginPassword" class="input-field" placeholder="รหัสผ่าน (Password)" autocomplete="current-password" required>
+          <button type="button" class="input-toggle" onclick="togglePassword()"><i class="fas fa-eye" id="eyeIcon"></i></button>
+        </div>
+        <button type="submit" id="loginBtn" class="btn-login" onclick="doLogin()">
+          <span id="loginBtnText">เข้าสู่ระบบ</span>
+          <span id="loginBtnLoading" style="display: none;"><i class="fas fa-spinner fa-spin"></i> กำลังเข้าสู่ระบบ...</span>
+        </button>
+      </form>
+      <p id="loginError" class="login-error" style="display: none;"></p>
+      <p class="login-footer">&copy; 2026 Stock Management System</p>
+    </div>
+  </div>
+
+  <!-- MAIN APP VIEW -->
+  <div id="appView" class="app-container" style="display: none;">
+    <aside id="sidebar" class="sidebar">
+      <div class="sidebar-logo"><i class="fas fa-boxes-stacked"></i><span class="sidebar-logo-text">Stock MS</span></div>
+      <nav class="sidebar-nav">
+        <p class="sidebar-section-title">เมนูหลัก</p>
+        <a href="#" class="sidebar-item active" data-page="dashboard" onclick="navigateTo('dashboard', this)"><i class="fas fa-chart-pie"></i><span>แดชบอร์ด</span></a>
+        <a href="#" class="sidebar-item" data-page="products" onclick="navigateTo('products', this)"><i class="fas fa-box-open"></i><span>สินค้า</span></a>
+        <a href="#" class="sidebar-item" data-page="stock" onclick="navigateTo('stock', this)"><i class="fas fa-arrow-right-arrow-left"></i><span>เคลื่อนไหวสต็อก</span></a>
+        <a href="#" class="sidebar-item" data-page="history" onclick="navigateTo('history', this)"><i class="fas fa-clock-rotate-left"></i><span>ประวัติการทำรายการ</span></a>
+        <p class="sidebar-section-title">จัดการระบบ</p>
+        <a href="#" class="sidebar-item" data-page="users" onclick="navigateTo('users', this)" id="menuUsers"><i class="fas fa-users-gear"></i><span>ผู้ใช้งาน</span></a>
+        <a href="#" class="sidebar-item" data-page="settings" onclick="navigateTo('settings', this)" id="menuSettings"><i class="fas fa-gear"></i><span>ตั้งค่า</span></a>
+      </nav>
+      <div class="sidebar-footer">
+        <div class="sidebar-user">
+          <div class="sidebar-user-avatar" id="sidebarAvatar">A</div>
+          <div class="sidebar-user-info">
+            <p class="sidebar-user-name" id="sidebarUserName">Admin</p>
+            <p class="sidebar-user-role" id="sidebarUserRole">ADMIN</p>
+          </div>
+        </div>
+        <button class="btn-logout" onclick="doLogout()"><i class="fas fa-right-from-bracket"></i><span>ออกจากระบบ</span></button>
+      </div>
+    </aside>
+    <div id="sidebarOverlay" class="sidebar-overlay" onclick="toggleSidebar()"></div>
+
+    <div class="main-content">
+      <header class="topbar">
+        <div class="topbar-left">
+          <button class="btn-hamburger" onclick="toggleSidebar()"><i class="fas fa-bars"></i></button>
+          <h2 class="topbar-title" id="pageTitle">แดชบอร์ด</h2>
+        </div>
+        <div class="topbar-right">
+          <div class="topbar-user">
+            <div class="topbar-avatar" id="topbarAvatar">A</div>
+            <span class="topbar-username" id="topbarUsername">Admin</span>
+          </div>
+        </div>
+      </header>
+
+      <main class="content-area">
+
+        <!-- PAGE: Dashboard -->
+        <div id="page-dashboard" class="page active">
+          <div class="stats-grid">
+            <div class="stat-card stat-blue"><div class="stat-icon"><i class="fas fa-box-open"></i></div><div class="stat-info"><p class="stat-value" id="statTotalProducts">--</p><p class="stat-label">สินค้าทั้งหมด</p></div></div>
+            <div class="stat-card stat-green"><div class="stat-icon"><i class="fas fa-money-bill-trend-up"></i></div><div class="stat-info"><p class="stat-value" id="statStockValue">--</p><p class="stat-label">มูลค่าสต็อก</p></div></div>
+            <div class="stat-card stat-red"><div class="stat-icon"><i class="fas fa-triangle-exclamation"></i></div><div class="stat-info"><p class="stat-value" id="statLowStock">--</p><p class="stat-label">สต็อกต่ำ</p></div></div>
+            <div class="stat-card stat-purple"><div class="stat-icon"><i class="fas fa-arrow-right-arrow-left"></i></div><div class="stat-info"><p class="stat-value" id="statTodayTxn">--</p><p class="stat-label">รายการวันนี้</p></div></div>
+          </div>
+          <div class="dashboard-panels">
+            <div class="panel">
+              <h3 class="panel-title"><i class="fas fa-chart-line"></i> กราฟเคลื่อนไหวสต็อก (30 วัน)</h3>
+              <div class="panel-body chart-wrap"><canvas id="movementChart"></canvas></div>
+            </div>
+            <div class="panel">
+              <h3 class="panel-title"><i class="fas fa-triangle-exclamation"></i> สินค้าใกล้หมด</h3>
+              <div class="panel-body" id="lowStockContainer"><p class="placeholder-text">กำลังโหลด...</p></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- PAGE: Products (เพิ่มปุ่ม Export) -->
+        <div id="page-products" class="page">
+          <div class="panel">
+            <div class="panel-header-toolbar">
+              <h3 class="panel-title" style="border:none; padding:0;"><i class="fas fa-box-open"></i> รายการสินค้า</h3>
+              <div class="toolbar-actions">
+                <div class="search-box"><i class="fas fa-search"></i><input type="text" id="productSearchInput" placeholder="ค้นหาชื่อ, บาร์โค้ด, หมวดหมู่..." onkeyup="handleProductSearch()"></div>
+                <button class="btn btn-secondary" onclick="exportStock()"><i class="fas fa-file-csv"></i> ส่งออก CSV</button>
+                <button class="btn btn-primary" onclick="openProductModal('add')"><i class="fas fa-plus"></i> เพิ่มสินค้า</button>
+              </div>
+            </div>
+            <div class="panel-body table-responsive">
+              <table class="data-table" id="productTable">
+                <thead><tr><th>รหัส</th><th>บาร์โค้ด</th><th>ชื่อสินค้า</th><th>หมวดหมู่</th><th>หน่วย</th><th>ราคาทุน</th><th>ราคาขาย</th><th>คงเหลือ</th><th>สถานะ</th><th class="text-center">จัดการ</th></tr></thead>
+                <tbody id="productTableBody"><tr><td colspan="10" class="text-center text-muted">กำลังโหลดข้อมูล...</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- PAGE: Stock Movement -->
+        <div id="page-stock" class="page">
+          <div class="panel">
+            <h3 class="panel-title"><i class="fas fa-arrow-right-arrow-left"></i> เคลื่อนไหวสต็อก</h3>
+            <div class="panel-body">
+              <div class="stock-type-tabs">
+                <button type="button" class="stock-tab active" data-type="IN" onclick="setStockType('IN', this)"><i class="fas fa-arrow-down-to-line"></i> รับเข้า</button>
+                <button type="button" class="stock-tab" data-type="OUT" onclick="setStockType('OUT', this)"><i class="fas fa-arrow-up-from-line"></i> จ่ายออก</button>
+                <button type="button" class="stock-tab" data-type="ADJUST" onclick="setStockType('ADJUST', this)"><i class="fas fa-sliders"></i> ปรับปรุง</button>
+              </div>
+              <div class="stock-form-grid">
+                <div class="form-group">
+                  <label>เลือกสินค้า <span class="req">*</span></label>
+                  <select id="smProductSelect" class="form-control" onchange="onStockProductChange()"><option value="">-- กำลังโหลดรายการสินค้า --</option></select>
+                </div>
+                <div class="form-group">
+                  <label>หรือสแกนบาร์โค้ด</label>
+                  <input type="text" id="smBarcode" class="form-control" placeholder="ยิงบาร์โค้ดแล้ว Enter" onkeydown="onStockBarcodeKey(event)">
+                </div>
+                <div class="form-group form-group-full">
+                  <div class="stock-info-box" id="smProductInfo"><span class="text-muted">กรุณาเลือกสินค้าเพื่อแสดงข้อมูล</span></div>
+                </div>
+                <div class="form-group">
+                  <label id="smQtyLabel">จำนวน <span class="req">*</span></label>
+                  <input type="number" id="smQuantity" class="form-control" placeholder="0" min="0" step="1">
+                </div>
+                <div class="form-group">
+                  <label>หมายเหตุ</label>
+                  <input type="text" id="smNote" class="form-control" placeholder="เช่น รับจาก Supplier A">
+                </div>
+              </div>
+              <div class="stock-form-actions">
+                <button class="btn btn-primary btn-lg" id="smSubmitBtn" onclick="submitStockMovement()"><i class="fas fa-check"></i> <span id="smSubmitText">บันทึกรับเข้า</span></button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- PAGE: History (เพิ่มปุ่ม Export) -->
+        <div id="page-history" class="page">
+          <div class="panel">
+            <div class="panel-header-toolbar">
+              <h3 class="panel-title" style="border:none; padding:0;"><i class="fas fa-clock-rotate-left"></i> ประวัติการทำรายการ</h3>
+              <div class="toolbar-actions">
+                <button class="btn btn-secondary" onclick="exportHistory()"><i class="fas fa-file-csv"></i> ส่งออก CSV</button>
+              </div>
+            </div>
+            <div class="filter-bar">
+              <div class="filter-item"><label>ประเภท</label><select id="histType" class="form-control form-control-sm"><option value="ALL">ทั้งหมด</option><option value="IN">รับเข้า</option><option value="OUT">จ่ายออก</option><option value="ADJUST">ปรับปรุง</option></select></div>
+              <div class="filter-item"><label>จากวันที่</label><input type="date" id="histDateFrom" class="form-control form-control-sm"></div>
+              <div class="filter-item"><label>ถึงวันที่</label><input type="date" id="histDateTo" class="form-control form-control-sm"></div>
+              <div class="filter-item filter-grow"><label>ค้นหา</label><input type="text" id="histKeyword" class="form-control form-control-sm" placeholder="เอกสาร / ชื่อสินค้า / หมายเหตุ"></div>
+              <div class="filter-item filter-actions">
+                <button class="btn btn-primary btn-sm" onclick="loadTransactions()"><i class="fas fa-search"></i> ค้นหา</button>
+                <button class="btn btn-secondary btn-sm" onclick="resetHistoryFilter()"><i class="fas fa-rotate-left"></i> รีเซ็ต</button>
+              </div>
+            </div>
+            <div class="panel-body table-responsive">
+              <table class="data-table" id="historyTable">
+                <thead><tr><th>เอกสาร</th><th>ประเภท</th><th>รหัส</th><th>ชื่อสินค้า</th><th class="text-right">จำนวน</th><th class="text-right">ราคา/หน่วย</th><th class="text-right">รวม</th><th>หมายเหตุ</th><th>วันเวลา</th><th>ผู้ทำ</th></tr></thead>
+                <tbody id="historyTableBody"><tr><td colspan="10" class="text-center text-muted">กำลังโหลด...</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- PAGE: Users (Step 7 เต็มรูปแบบ) -->
+        <div id="page-users" class="page">
+          <div class="panel">
+            <div class="panel-header-toolbar">
+              <h3 class="panel-title" style="border:none; padding:0;"><i class="fas fa-users-gear"></i> จัดการผู้ใช้งาน</h3>
+              <div class="toolbar-actions">
+                <button class="btn btn-primary" onclick="openUserModal('add')"><i class="fas fa-user-plus"></i> เพิ่มผู้ใช้</button>
+              </div>
+            </div>
+            <div class="panel-body table-responsive">
+              <table class="data-table" id="userTable">
+                <thead><tr><th>รหัส</th><th>Username</th><th>ชื่อที่แสดง</th><th>สิทธิ์</th><th>สถานะ</th><th>เข้าใช้ล่าสุด</th><th class="text-center">จัดการ</th></tr></thead>
+                <tbody id="userTableBody"><tr><td colspan="7" class="text-center text-muted">กำลังโหลด...</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- PAGE: Settings (Step 7 เต็มรูปแบบ) -->
+        <div id="page-settings" class="page">
+          <div class="panel">
+            <h3 class="panel-title"><i class="fas fa-gear"></i> ตั้งค่าระบบ</h3>
+            <div class="panel-body">
+              <div class="settings-form" id="settingsForm">
+                <div class="form-grid">
+                  <div class="form-group form-group-full">
+                    <label>ชื่อบริษัท / องค์กร</label>
+                    <input type="text" id="setCompanyName" class="form-control" placeholder="บริษัท ของฉัน จำกัด">
+                    <small class="form-hint"><i class="fas fa-circle-info"></i> แสดงบนรายงานและส่วนหัวระบบ</small>
+                  </div>
+                  <div class="form-group">
+                    <label>สกุลเงิน</label>
+                    <select id="setCurrency" class="form-control">
+                      <option value="THB">THB (บาท ฿)</option>
+                      <option value="USD">USD (ดอลลาร์ $)</option>
+                      <option value="EUR">EUR (ยูโร €)</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label>แจ้งเตือนสต็อกต่ำ</label>
+                    <select id="setLowStockAlert" class="form-control">
+                      <option value="true">เปิด</option>
+                      <option value="false">ปิด</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label>Session หมดอายุ (ชั่วโมง)</label>
+                    <input type="number" id="setSessionTimeout" class="form-control" placeholder="8" min="1" max="6">
+                    <small class="form-hint"><i class="fas fa-circle-info"></i> สูงสุด 6 ชม. (ข้อจำกัด CacheService)</small>
+                  </div>
+                </div>
+                <div class="settings-actions">
+                  <button class="btn btn-primary" onclick="saveSettingsForm()"><i class="fas fa-save"></i> บันทึกการตั้งค่า</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </main>
+    </div>
+  </div>
+
+  <!-- MODAL: ฟอร์มสินค้า -->
+  <div id="productModal" class="modal-overlay" style="display:none;">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 id="productModalTitle"><i class="fas fa-box-open"></i> เพิ่มสินค้าใหม่</h3>
+        <button class="modal-close" onclick="closeProductModal()"><i class="fas fa-times"></i></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="pmProductId">
+        <div class="form-grid">
+          <div class="form-group"><label>ชื่อสินค้า <span class="req">*</span></label><input type="text" id="pmProductName" class="form-control" placeholder="เช่น กระดาษ A4 80g"></div>
+          <div class="form-group"><label>บาร์โค้ด</label><input type="text" id="pmBarcode" class="form-control" placeholder="สแกนหรือกรอกบาร์โค้ด"></div>
+          <div class="form-group"><label>หมวดหมู่</label><input type="text" id="pmCategory" class="form-control" placeholder="เช่น เครื่องเขียน"></div>
+          <div class="form-group"><label>หน่วยนับ <span class="req">*</span></label><input type="text" id="pmUnit" class="form-control" placeholder="เช่น ชิ้น, กล่อง, รีม"></div>
+          <div class="form-group"><label>ราคาทุน (บาท)</label><input type="number" id="pmCostPrice" class="form-control" placeholder="0.00" step="0.01" min="0"></div>
+          <div class="form-group"><label>ราคาขาย (บาท)</label><input type="number" id="pmSellPrice" class="form-control" placeholder="0.00" step="0.01" min="0"></div>
+          <div class="form-group"><label>สต็อกขั้นต่ำ (แจ้งเตือน)</label><input type="number" id="pmMinStock" class="form-control" placeholder="0" min="0"></div>
+          <div class="form-group"><label>สถานะ</label><select id="pmStatus" class="form-control"><option value="ACTIVE">ACTIVE (ใช้งาน)</option><option value="INACTIVE">INACTIVE (ระงับ)</option></select></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeProductModal()">ยกเลิก</button>
+        <button class="btn btn-primary" onclick="submitProduct()"><i class="fas fa-save"></i> บันทึกข้อมูล</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: ฟอร์มผู้ใช้ (Step 7) -->
+  <div id="userModal" class="modal-overlay" style="display:none;">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 id="userModalTitle"><i class="fas fa-user-plus"></i> เพิ่มผู้ใช้ใหม่</h3>
+        <button class="modal-close" onclick="closeUserModal()"><i class="fas fa-times"></i></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="umUserId">
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Username <span class="req">*</span></label>
+            <input type="text" id="umUsername" class="form-control" placeholder="เช่น somchai">
+          </div>
+          <div class="form-group">
+            <label id="umPasswordLabel">รหัสผ่าน <span class="req">*</span></label>
+            <input type="password" id="umPassword" class="form-control" placeholder="อย่างน้อย 6 ตัวอักษร">
+            <small class="form-hint" id="umPasswordHint" style="display:none;"><i class="fas fa-circle-info"></i> เว้นว่างไว้ = ไม่เปลี่ยนรหัสผ่านเดิม</small>
+          </div>
+          <div class="form-group">
+            <label>ชื่อที่แสดง <span class="req">*</span></label>
+            <input type="text" id="umDisplayName" class="form-control" placeholder="เช่น สมชาย ใจดี">
+          </div>
+          <div class="form-group">
+            <label>สิทธิ์ <span class="req">*</span></label>
+            <select id="umRole" class="form-control">
+              <option value="STAFF">STAFF (พนักงาน)</option>
+              <option value="ADMIN">ADMIN (ผู้ดูแล)</option>
+            </select>
+          </div>
+          <div class="form-group" id="umStatusGroup" style="display:none;">
+            <label>สถานะ</label>
+            <select id="umStatus" class="form-control">
+              <option value="ACTIVE">ACTIVE (ใช้งาน)</option>
+              <option value="INACTIVE">INACTIVE (ปิดใช้งาน)</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeUserModal()">ยกเลิก</button>
+        <button class="btn btn-primary" onclick="submitUser()"><i class="fas fa-save"></i> บันทึกข้อมูล</button>
+      </div>
+    </div>
+  </div>
+
+  <?!= include('script'); ?>
+</body>
+</html>

@@ -1,0 +1,810 @@
+<script>
+/* ============================================================
+   FILE: script.html (ฉบับสมบูรณ์ รวม Step 4-7)
+   DESCRIPTION: JavaScript ฝั่ง Client ทั้งหมด
+     - Auth, Navigation, Dashboard + Chart
+     - Product CRUD, Stock Movement, History
+     - [STEP 7] Users CRUD, Settings, Export CSV
+     - Defensive null check ทุก withSuccessHandler
+   ============================================================ */
+
+/* GLOBAL VARIABLES */
+var currentToken = null;
+var currentUser = null;
+var cachedProducts = [];
+var cachedUsers = [];            // [STEP 7] แคชผู้ใช้
+var stockProducts = [];
+var currentStockType = 'IN';
+var movementChartInstance = null;
+var searchTimeout = null;
+
+var Toast = Swal.mixin({
+  toast: true, position: 'top-end', showConfirmButton: false, timer: 3000, timerProgressBar: true,
+  didOpen: function(toast) { toast.addEventListener('mouseenter', Swal.stopTimer); toast.addEventListener('mouseleave', Swal.resumeTimer); }
+});
+
+/* INITIALIZATION */
+window.onload = function() {
+  var savedToken = localStorage.getItem('stockToken');
+  if (savedToken) {
+    showLoading('กำลังตรวจสอบ Session...');
+    google.script.run
+      .withSuccessHandler(function(result) {
+        hideLoading();
+        if (result && result.valid) { currentToken = savedToken; currentUser = result.user; showApp(); }
+        else { localStorage.removeItem('stockToken'); showLogin(); }
+      })
+      .withFailureHandler(function() { hideLoading(); localStorage.removeItem('stockToken'); showLogin(); })
+      .validateSession(savedToken);
+  } else { showLogin(); }
+};
+
+/* AUTH */
+function doLogin() {
+  var username = document.getElementById('loginUsername').value.trim();
+  var password = document.getElementById('loginPassword').value;
+  var errorEl = document.getElementById('loginError');
+  var btnText = document.getElementById('loginBtnText');
+  var btnLoading = document.getElementById('loginBtnLoading');
+  var loginBtn = document.getElementById('loginBtn');
+  var loginCard = document.getElementById('loginCard');
+  errorEl.style.display = 'none';
+  if (!username || !password) {
+    errorEl.textContent = 'กรุณากรอก Username และ Password'; errorEl.style.display = 'block';
+    loginCard.classList.add('shake'); setTimeout(function() { loginCard.classList.remove('shake'); }, 500); return;
+  }
+  btnText.style.display = 'none'; btnLoading.style.display = 'inline'; loginBtn.disabled = true;
+  google.script.run
+    .withSuccessHandler(function(result) {
+      btnText.style.display = 'inline'; btnLoading.style.display = 'none'; loginBtn.disabled = false;
+      if (result && result.success) {
+        currentToken = result.token; currentUser = result.user; localStorage.setItem('stockToken', result.token);
+        showApp(); Toast.fire({ icon: 'success', title: 'สวัสดี, ' + result.user.DisplayName + '!' });
+      } else {
+        var msg = (result && result.message) ? result.message : 'เข้าสู่ระบบไม่สำเร็จ';
+        errorEl.textContent = msg; errorEl.style.display = 'block';
+        loginCard.classList.add('shake'); setTimeout(function() { loginCard.classList.remove('shake'); }, 500);
+      }
+    })
+    .withFailureHandler(function(error) {
+      btnText.style.display = 'inline'; btnLoading.style.display = 'none'; loginBtn.disabled = false;
+      errorEl.textContent = 'เกิดข้อผิดพลาด: ' + getErrorMessage(error); errorEl.style.display = 'block';
+    })
+    .login(username, password);
+}
+
+function doLogout() {
+  Swal.fire({ title: 'ออกจากระบบ?', text: 'คุณต้องการออกจากระบบหรือไม่', icon: 'question', showCancelButton: true, confirmButtonColor: '#EF4444', cancelButtonColor: '#64748B', confirmButtonText: 'ออกจากระบบ', cancelButtonText: 'ยกเลิก' })
+    .then(function(result) {
+      if (result.isConfirmed) {
+        showLoading('กำลังออกจากระบบ...');
+        google.script.run.withSuccessHandler(function() { hideLoading(); currentToken = null; currentUser = null; localStorage.removeItem('stockToken'); showLogin(); })
+          .withFailureHandler(function() { hideLoading(); currentToken = null; currentUser = null; localStorage.removeItem('stockToken'); showLogin(); })
+          .logout(currentToken);
+      }
+    });
+}
+
+function togglePassword() {
+  var input = document.getElementById('loginPassword'); var icon = document.getElementById('eyeIcon');
+  if (input.type === 'password') { input.type = 'text'; icon.className = 'fas fa-eye-slash'; }
+  else { input.type = 'password'; icon.className = 'fas fa-eye'; }
+}
+
+/* VIEW MANAGEMENT */
+function showLogin() {
+  document.getElementById('loginView').style.display = 'flex';
+  document.getElementById('appView').style.display = 'none';
+  document.getElementById('loginUsername').value = '';
+  document.getElementById('loginPassword').value = '';
+  document.getElementById('loginError').style.display = 'none';
+  document.getElementById('loginUsername').focus();
+}
+
+function showApp() {
+  document.getElementById('loginView').style.display = 'none';
+  document.getElementById('appView').style.display = 'flex';
+  var displayName = currentUser.DisplayName || currentUser.Username;
+  var initial = displayName.charAt(0).toUpperCase();
+  var role = currentUser.Role || 'STAFF';
+  document.getElementById('sidebarUserName').textContent = displayName;
+  document.getElementById('sidebarUserRole').textContent = role;
+  document.getElementById('sidebarAvatar').textContent = initial;
+  document.getElementById('topbarAvatar').textContent = initial;
+  document.getElementById('topbarUsername').textContent = displayName;
+  // [STEP 7] ซ่อนเมนู Users + Settings ถ้าไม่ใช่ ADMIN
+  var isAdmin = (role === 'ADMIN');
+  document.getElementById('menuUsers').style.display = isAdmin ? 'flex' : 'none';
+  document.getElementById('menuSettings').style.display = isAdmin ? 'flex' : 'none';
+  navigateTo('dashboard', document.querySelector('[data-page="dashboard"]'));
+}
+
+/* NAVIGATION */
+function navigateTo(pageName, menuItem) {
+  if (typeof event !== 'undefined' && event) { event.preventDefault(); }
+  var pages = document.querySelectorAll('.page');
+  for (var i = 0; i < pages.length; i++) { pages[i].classList.remove('active'); }
+  var targetPage = document.getElementById('page-' + pageName);
+  if (targetPage) { targetPage.classList.add('active'); }
+  var items = document.querySelectorAll('.sidebar-item');
+  for (var j = 0; j < items.length; j++) { items[j].classList.remove('active'); }
+  if (menuItem) { menuItem.classList.add('active'); }
+  var titles = { dashboard: 'แดชบอร์ด', products: 'จัดการสินค้า', stock: 'เคลื่อนไหวสต็อก', history: 'ประวัติการทำรายการ', users: 'จัดการผู้ใช้งาน', settings: 'ตั้งค่าระบบ' };
+  document.getElementById('pageTitle').textContent = titles[pageName] || pageName;
+
+  if (pageName === 'dashboard') { loadDashboardStats(); loadMovementChart(); }
+  if (pageName === 'products') { loadProducts(); }
+  if (pageName === 'stock') { loadStockForm(); }
+  if (pageName === 'history') { loadTransactions(); }
+  if (pageName === 'users') { loadUsers(); }
+  if (pageName === 'settings') { loadSettings(); }
+
+  closeSidebar();
+}
+
+function toggleSidebar() { document.getElementById('sidebar').classList.toggle('open'); document.getElementById('sidebarOverlay').classList.toggle('show'); }
+function closeSidebar() { document.getElementById('sidebar').classList.remove('open'); document.getElementById('sidebarOverlay').classList.remove('show'); }
+
+/* DASHBOARD STATS */
+function loadDashboardStats() {
+  google.script.run
+    .withSuccessHandler(function(result) {
+      if (result && result.success) {
+        var s = result.stats;
+        document.getElementById('statTotalProducts').textContent = formatNumber(s.totalProducts);
+        document.getElementById('statStockValue').textContent = formatCurrency(s.stockValue);
+        document.getElementById('statLowStock').textContent = formatNumber(s.lowStockCount);
+        document.getElementById('statTodayTxn').textContent = formatNumber(s.todayTxn);
+        renderLowStock(s.lowStockList);
+      }
+    })
+    .withFailureHandler(function(err) { console.error('[loadDashboardStats] failure:', err); })
+    .getDashboardStats(currentToken);
+}
+
+function renderLowStock(list) {
+  var container = document.getElementById('lowStockContainer');
+  if (!list || list.length === 0) { container.innerHTML = '<p class="placeholder-text"><i class="fas fa-circle-check" style="color:#10B981;"></i> สต็อกทุกรายการอยู่ในระดับปกติ</p>'; return; }
+  var html = '<div class="lowstock-list">';
+  for (var i = 0; i < list.length; i++) {
+    var item = list[i];
+    html += '<div class="lowstock-item" style="animation-delay:' + (i * 0.05) + 's">';
+    html += '<div><p class="lowstock-name">' + escapeHtml(item.ProductName) + '</p><p class="lowstock-id">' + escapeHtml(item.ProductID) + '</p></div>';
+    html += '<div class="lowstock-qty"><span class="stock-low">' + formatNumber(item.CurrentStock) + '</span> / ' + formatNumber(item.MinStock) + ' ' + escapeHtml(item.Unit) + '</div>';
+    html += '</div>';
+  }
+  html += '</div>';
+  container.innerHTML = html;
+}
+
+/* MOVEMENT CHART */
+function loadMovementChart() {
+  google.script.run
+    .withSuccessHandler(function(result) {
+      if (!(result && result.success)) return;
+      var ctx = document.getElementById('movementChart');
+      if (!ctx) return;
+      if (movementChartInstance) { movementChartInstance.destroy(); movementChartInstance = null; }
+      movementChartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: result.labels,
+          datasets: [
+            { label: 'รับเข้า', data: result.inData, borderColor: '#10B981', backgroundColor: 'rgba(16,185,129,0.12)', fill: true, tension: 0.35, borderWidth: 2, pointRadius: 2 },
+            { label: 'จ่ายออก', data: result.outData, borderColor: '#EF4444', backgroundColor: 'rgba(239,68,68,0.12)', fill: true, tension: 0.35, borderWidth: 2, pointRadius: 2 }
+          ]
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { position: 'top', labels: { font: { family: 'Kanit' } } } },
+          scales: { y: { beginAtZero: true, ticks: { precision: 0, font: { family: 'Kanit' } } }, x: { ticks: { font: { family: 'Kanit', size: 10 } } } }
+        }
+      });
+    })
+    .withFailureHandler(function(err) { console.error('[loadMovementChart] failure:', err); })
+    .getStockMovementChart(currentToken);
+}
+
+/* PRODUCT MANAGEMENT */
+function loadProducts(keyword) {
+  var tbody = document.getElementById('productTableBody');
+  tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted"><i class="fas fa-spinner fa-spin"></i> กำลังโหลดข้อมูล...</td></tr>';
+  google.script.run
+    .withSuccessHandler(function(result) {
+      if (result && result.success) { cachedProducts = result.products || []; renderProductTable(cachedProducts); }
+      else { var msg = (result && result.message) ? result.message : 'โหลดข้อมูลไม่สำเร็จ'; tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted">' + escapeHtml(msg) + '</td></tr>'; }
+    })
+    .withFailureHandler(function(err) { tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted">โหลดข้อมูลไม่สำเร็จ</td></tr>'; showToast('error', getErrorMessage(err)); })
+    .getProducts(currentToken, keyword || '');
+}
+
+function renderProductTable(products) {
+  var tbody = document.getElementById('productTableBody');
+  if (!products || products.length === 0) { tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted">ไม่พบข้อมูลสินค้า</td></tr>'; return; }
+  var html = '';
+  for (var i = 0; i < products.length; i++) {
+    var p = products[i];
+    var stock = parseFloat(p.CurrentStock) || 0;
+    var min = parseFloat(p.MinStock) || 0;
+    var isLow = (stock <= min && p.Status === 'ACTIVE');
+    var statusBadge = (p.Status === 'ACTIVE') ? '<span class="badge badge-success">ACTIVE</span>' : '<span class="badge badge-danger">INACTIVE</span>';
+    var stockHtml = '<span class="' + (isLow ? 'stock-low' : 'stock-normal') + '">' + formatNumber(stock) + '</span>';
+    if (isLow) { stockHtml += ' <i class="fas fa-triangle-exclamation" style="color:#EF4444; font-size:12px;"></i>'; }
+    var safeName = escapeHtml(p.ProductName).replace(/'/g, "\\'");
+    html += '<tr class="table-row-anim" style="animation-delay:' + (i * 0.03) + 's">';
+    html += '<td><span class="code-text">' + escapeHtml(p.ProductID) + '</span></td>';
+    html += '<td>' + (p.Barcode ? escapeHtml(String(p.Barcode)) : '<span class="text-muted">-</span>') + '</td>';
+    html += '<td class="fw-medium">' + escapeHtml(p.ProductName) + '</td>';
+    html += '<td>' + (p.Category ? escapeHtml(p.Category) : '<span class="text-muted">-</span>') + '</td>';
+    html += '<td>' + escapeHtml(p.Unit) + '</td>';
+    html += '<td>' + formatCurrency(p.CostPrice) + '</td>';
+    html += '<td>' + formatCurrency(p.SellPrice) + '</td>';
+    html += '<td>' + stockHtml + '</td>';
+    html += '<td>' + statusBadge + '</td>';
+    html += '<td class="text-center">';
+    html += '<button class="btn-icon btn-edit" title="แก้ไข" onclick="openProductModal(\'edit\', \'' + escapeHtml(p.ProductID) + '\')"><i class="fas fa-pen-to-square"></i></button>';
+    html += '<button class="btn-icon btn-del" title="ลบ" onclick="confirmDeleteProduct(\'' + escapeHtml(p.ProductID) + '\', \'' + safeName + '\')"><i class="fas fa-trash-can"></i></button>';
+    html += '</td></tr>';
+  }
+  tbody.innerHTML = html;
+}
+
+function handleProductSearch() {
+  clearTimeout(searchTimeout);
+  searchTimeout = setTimeout(function() { loadProducts(document.getElementById('productSearchInput').value.trim()); }, 400);
+}
+
+function openProductModal(mode, productId) {
+  var modal = document.getElementById('productModal'); var title = document.getElementById('productModalTitle');
+  document.getElementById('pmProductId').value = '';
+  document.getElementById('pmProductName').value = '';
+  document.getElementById('pmBarcode').value = '';
+  document.getElementById('pmCategory').value = '';
+  document.getElementById('pmUnit').value = '';
+  document.getElementById('pmCostPrice').value = '';
+  document.getElementById('pmSellPrice').value = '';
+  document.getElementById('pmMinStock').value = '';
+  document.getElementById('pmStatus').value = 'ACTIVE';
+  if (mode === 'edit' && productId) {
+    title.innerHTML = '<i class="fas fa-pen-to-square"></i> แก้ไขสินค้า';
+    var p = null;
+    for (var i = 0; i < cachedProducts.length; i++) { if (String(cachedProducts[i].ProductID) === String(productId)) { p = cachedProducts[i]; break; } }
+    if (!p) { showToast('error', 'ไม่พบข้อมูลสินค้า ' + productId); return; }
+    document.getElementById('pmProductId').value = p.ProductID;
+    document.getElementById('pmProductName').value = p.ProductName;
+    document.getElementById('pmBarcode').value = p.Barcode || '';
+    document.getElementById('pmCategory').value = p.Category || '';
+    document.getElementById('pmUnit').value = p.Unit;
+    document.getElementById('pmCostPrice').value = p.CostPrice;
+    document.getElementById('pmSellPrice').value = p.SellPrice;
+    document.getElementById('pmMinStock').value = p.MinStock;
+    document.getElementById('pmStatus').value = p.Status;
+  } else { title.innerHTML = '<i class="fas fa-box-open"></i> เพิ่มสินค้าใหม่'; }
+  modal.style.display = 'flex';
+  document.getElementById('pmProductName').focus();
+}
+
+function closeProductModal() { document.getElementById('productModal').style.display = 'none'; }
+
+function submitProduct() {
+  var productName = document.getElementById('pmProductName').value.trim();
+  var unit = document.getElementById('pmUnit').value.trim();
+  if (!productName) { showToast('warning', 'กรุณากรอกชื่อสินค้า'); document.getElementById('pmProductName').focus(); return; }
+  if (!unit) { showToast('warning', 'กรุณากรอกหน่วยนับ'); document.getElementById('pmUnit').focus(); return; }
+  if (!currentToken) { showToast('error', 'Session หมดอายุ กรุณา Login ใหม่'); return; }
+  var data = {
+    ProductID: document.getElementById('pmProductId').value, ProductName: productName,
+    Barcode: document.getElementById('pmBarcode').value.trim(), Category: document.getElementById('pmCategory').value.trim(),
+    Unit: unit, CostPrice: document.getElementById('pmCostPrice').value, SellPrice: document.getElementById('pmSellPrice').value,
+    MinStock: document.getElementById('pmMinStock').value, Status: document.getElementById('pmStatus').value
+  };
+  showLoading('กำลังบันทึกข้อมูลสินค้า...');
+  google.script.run
+    .withSuccessHandler(function(result) {
+      hideLoading();
+      if (result && result.success) { showToast('success', result.message); closeProductModal(); loadProducts(document.getElementById('productSearchInput').value.trim()); loadDashboardStats(); }
+      else { showToast('error', (result && result.message) ? result.message : 'บันทึกไม่สำเร็จ'); }
+    })
+    .withFailureHandler(function(err) { hideLoading(); showToast('error', 'บันทึกไม่สำเร็จ: ' + getErrorMessage(err)); })
+    .saveProduct(currentToken, data);
+}
+
+function confirmDeleteProduct(productId, productName) {
+  Swal.fire({ title: 'ยืนยันการลบ?', html: 'ต้องการลบสินค้า <b>' + escapeHtml(productName) + '</b><br>(' + escapeHtml(productId) + ') ใช่หรือไม่', icon: 'warning', showCancelButton: true, confirmButtonColor: '#EF4444', cancelButtonColor: '#64748B', confirmButtonText: 'ลบสินค้า', cancelButtonText: 'ยกเลิก' })
+    .then(function(result) {
+      if (result.isConfirmed) {
+        showLoading('กำลังลบสินค้า...');
+        google.script.run
+          .withSuccessHandler(function(res) { hideLoading(); if (res && res.success) { showToast('success', res.message); loadProducts(document.getElementById('productSearchInput').value.trim()); loadDashboardStats(); } else { showToast('error', (res && res.message) ? res.message : 'ลบไม่สำเร็จ'); } })
+          .withFailureHandler(function(err) { hideLoading(); showToast('error', 'ลบไม่สำเร็จ: ' + getErrorMessage(err)); })
+          .deleteProduct(currentToken, productId);
+      }
+    });
+}
+
+/* STOCK MOVEMENT */
+function loadStockForm() {
+  var select = document.getElementById('smProductSelect');
+  select.innerHTML = '<option value="">-- กำลังโหลด... --</option>';
+  document.getElementById('smBarcode').value = '';
+  document.getElementById('smQuantity').value = '';
+  document.getElementById('smNote').value = '';
+  document.getElementById('smProductInfo').innerHTML = '<span class="text-muted">กรุณาเลือกสินค้าเพื่อแสดงข้อมูล</span>';
+  setStockType('IN', document.querySelector('.stock-tab[data-type="IN"]'));
+  google.script.run
+    .withSuccessHandler(function(result) {
+      if (result && result.success) {
+        stockProducts = result.products || [];
+        var html = '<option value="">-- เลือกสินค้า --</option>';
+        for (var i = 0; i < stockProducts.length; i++) {
+          var p = stockProducts[i];
+          html += '<option value="' + escapeHtml(p.ProductID) + '">' + escapeHtml(p.ProductID) + ' - ' + escapeHtml(p.ProductName) + ' (คงเหลือ: ' + formatNumber(p.CurrentStock) + ' ' + escapeHtml(p.Unit) + ')</option>';
+        }
+        select.innerHTML = html;
+      } else { select.innerHTML = '<option value="">-- โหลดไม่สำเร็จ --</option>'; }
+    })
+    .withFailureHandler(function(err) { select.innerHTML = '<option value="">-- โหลดไม่สำเร็จ --</option>'; console.error('[loadStockForm]', err); })
+    .getActiveProductsForSelect(currentToken);
+}
+
+function setStockType(type, btn) {
+  currentStockType = type;
+  var tabs = document.querySelectorAll('.stock-tab');
+  for (var i = 0; i < tabs.length; i++) { tabs[i].classList.remove('active'); }
+  if (btn) { btn.classList.add('active'); }
+  var qtyLabel = document.getElementById('smQtyLabel');
+  var submitText = document.getElementById('smSubmitText');
+  var submitBtn = document.getElementById('smSubmitBtn');
+  if (type === 'IN') {
+    qtyLabel.innerHTML = 'จำนวนรับเข้า <span class="req">*</span>'; submitText.textContent = 'บันทึกรับเข้า';
+    submitBtn.className = 'btn btn-lg'; submitBtn.style.background = 'linear-gradient(135deg,#10B981,#059669)'; submitBtn.style.color = 'white';
+  } else if (type === 'OUT') {
+    qtyLabel.innerHTML = 'จำนวนจ่ายออก <span class="req">*</span>'; submitText.textContent = 'บันทึกจ่ายออก';
+    submitBtn.className = 'btn btn-lg'; submitBtn.style.background = 'linear-gradient(135deg,#EF4444,#DC2626)'; submitBtn.style.color = 'white';
+  } else {
+    qtyLabel.innerHTML = 'สต็อกใหม่ที่ต้องการตั้ง <span class="req">*</span>'; submitText.textContent = 'บันทึกปรับปรุง';
+    submitBtn.className = 'btn btn-lg'; submitBtn.style.background = 'linear-gradient(135deg,#F59E0B,#D97706)'; submitBtn.style.color = 'white';
+  }
+}
+
+function getSelectedStockProduct() {
+  var id = document.getElementById('smProductSelect').value;
+  if (!id) return null;
+  for (var i = 0; i < stockProducts.length; i++) { if (String(stockProducts[i].ProductID) === String(id)) return stockProducts[i]; }
+  return null;
+}
+
+function onStockProductChange() {
+  var p = getSelectedStockProduct();
+  var box = document.getElementById('smProductInfo');
+  if (!p) { box.innerHTML = '<span class="text-muted">กรุณาเลือกสินค้าเพื่อแสดงข้อมูล</span>'; return; }
+  var html = '';
+  html += '<div class="info-item"><span class="info-label">คงเหลือปัจจุบัน</span><span class="info-value highlight">' + formatNumber(p.CurrentStock) + ' ' + escapeHtml(p.Unit) + '</span></div>';
+  html += '<div class="info-item"><span class="info-label">ราคาทุน</span><span class="info-value">' + formatCurrency(p.CostPrice) + '</span></div>';
+  html += '<div class="info-item"><span class="info-label">ราคาขาย</span><span class="info-value">' + formatCurrency(p.SellPrice) + '</span></div>';
+  if (p.Barcode) { html += '<div class="info-item"><span class="info-label">บาร์โค้ด</span><span class="info-value">' + escapeHtml(p.Barcode) + '</span></div>'; }
+  box.innerHTML = html;
+}
+
+function onStockBarcodeKey(e) {
+  if (e.key !== 'Enter') return;
+  e.preventDefault();
+  var code = document.getElementById('smBarcode').value.trim();
+  if (!code) return;
+  var found = null;
+  for (var i = 0; i < stockProducts.length; i++) { if (String(stockProducts[i].Barcode) === code) { found = stockProducts[i]; break; } }
+  if (found) {
+    document.getElementById('smProductSelect').value = found.ProductID;
+    onStockProductChange();
+    document.getElementById('smQuantity').focus();
+    showToast('success', 'พบสินค้า: ' + found.ProductName);
+  } else { showToast('warning', 'ไม่พบสินค้าจากบาร์โค้ด: ' + code); }
+}
+
+function submitStockMovement() {
+  var productId = document.getElementById('smProductSelect').value;
+  var quantity = document.getElementById('smQuantity').value;
+  var note = document.getElementById('smNote').value.trim();
+  if (!productId) { showToast('warning', 'กรุณาเลือกสินค้า'); return; }
+  if (quantity === '' || isNaN(parseFloat(quantity))) { showToast('warning', 'กรุณากรอกจำนวนให้ถูกต้อง'); document.getElementById('smQuantity').focus(); return; }
+  if (!currentToken) { showToast('error', 'Session หมดอายุ กรุณา Login ใหม่'); return; }
+  var data = { type: currentStockType, productId: productId, quantity: quantity, note: note };
+  showLoading('กำลังบันทึกการเคลื่อนไหวสต็อก...');
+  google.script.run
+    .withSuccessHandler(function(result) {
+      hideLoading();
+      if (result && result.success) {
+        showToast('success', result.message);
+        document.getElementById('smQuantity').value = '';
+        document.getElementById('smNote').value = '';
+        var keepType = currentStockType;
+        loadStockForm();
+        setTimeout(function() { setStockType(keepType, document.querySelector('.stock-tab[data-type="' + keepType + '"]')); }, 100);
+        loadDashboardStats();
+      } else { showToast('error', (result && result.message) ? result.message : 'ทำรายการไม่สำเร็จ'); }
+    })
+    .withFailureHandler(function(err) { hideLoading(); showToast('error', 'ทำรายการไม่สำเร็จ: ' + getErrorMessage(err)); })
+    .processStockMovement(currentToken, data);
+}
+
+/* TRANSACTION HISTORY */
+function loadTransactions() {
+  var tbody = document.getElementById('historyTableBody');
+  tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted"><i class="fas fa-spinner fa-spin"></i> กำลังโหลด...</td></tr>';
+  var filter = {
+    type: document.getElementById('histType').value,
+    dateFrom: document.getElementById('histDateFrom').value,
+    dateTo: document.getElementById('histDateTo').value,
+    keyword: document.getElementById('histKeyword').value.trim()
+  };
+  google.script.run
+    .withSuccessHandler(function(result) {
+      if (result && result.success) { renderTransactionTable(result.transactions || []); }
+      else { tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted">' + escapeHtml((result && result.message) ? result.message : 'โหลดไม่สำเร็จ') + '</td></tr>'; }
+    })
+    .withFailureHandler(function(err) { tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted">โหลดไม่สำเร็จ</td></tr>'; showToast('error', getErrorMessage(err)); })
+    .getTransactions(currentToken, filter);
+}
+
+function renderTransactionTable(list) {
+  var tbody = document.getElementById('historyTableBody');
+  if (!list || list.length === 0) { tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted">ไม่พบรายการ</td></tr>'; return; }
+  var html = '';
+  for (var i = 0; i < list.length; i++) {
+    var t = list[i];
+    var qty = parseFloat(t.Quantity) || 0;
+    var typeBadge, qtyClass, qtyText;
+    if (t.Type === 'IN') { typeBadge = '<span class="badge badge-in">รับเข้า</span>'; qtyClass = 'qty-in'; qtyText = '+' + formatNumber(Math.abs(qty)); }
+    else if (t.Type === 'OUT') { typeBadge = '<span class="badge badge-out">จ่ายออก</span>'; qtyClass = 'qty-out'; qtyText = '-' + formatNumber(Math.abs(qty)); }
+    else { typeBadge = '<span class="badge badge-adjust">ปรับปรุง</span>'; qtyClass = 'qty-adjust'; qtyText = (qty >= 0 ? '+' : '') + formatNumber(qty); }
+    html += '<tr class="table-row-anim" style="animation-delay:' + (i * 0.02) + 's">';
+    html += '<td><span class="code-text">' + escapeHtml(t.DocNumber) + '</span></td>';
+    html += '<td>' + typeBadge + '</td>';
+    html += '<td>' + escapeHtml(t.ProductID) + '</td>';
+    html += '<td class="fw-medium">' + escapeHtml(t.ProductName) + '</td>';
+    html += '<td class="text-right ' + qtyClass + '">' + qtyText + '</td>';
+    html += '<td class="text-right">' + formatCurrency(t.UnitPrice) + '</td>';
+    html += '<td class="text-right">' + formatCurrency(t.TotalAmount) + '</td>';
+    html += '<td>' + (t.Note ? escapeHtml(t.Note) : '<span class="text-muted">-</span>') + '</td>';
+    html += '<td>' + formatDate(t.CreatedAt) + '</td>';
+    html += '<td>' + escapeHtml(t.CreatedBy) + '</td>';
+    html += '</tr>';
+  }
+  tbody.innerHTML = html;
+}
+
+function resetHistoryFilter() {
+  document.getElementById('histType').value = 'ALL';
+  document.getElementById('histDateFrom').value = '';
+  document.getElementById('histDateTo').value = '';
+  document.getElementById('histKeyword').value = '';
+  loadTransactions();
+}
+
+/* ============================================================
+   [STEP 7] USER MANAGEMENT
+   ============================================================ */
+
+/**
+ * loadUsers()
+ * DESCRIPTION: โหลดรายชื่อผู้ใช้ (ADMIN เท่านั้น)
+ *   กัน STAFF: ถ้าไม่ใช่ ADMIN แสดงข้อความไม่มีสิทธิ์
+ */
+function loadUsers() {
+  var tbody = document.getElementById('userTableBody');
+  if (!currentUser || currentUser.Role !== 'ADMIN') {
+    tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted"><i class="fas fa-lock"></i> คุณไม่มีสิทธิ์เข้าถึงหน้านี้</td></tr>';
+    return;
+  }
+  tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted"><i class="fas fa-spinner fa-spin"></i> กำลังโหลด...</td></tr>';
+  google.script.run
+    .withSuccessHandler(function(result) {
+      if (result && result.success) { cachedUsers = result.users || []; renderUserTable(cachedUsers); }
+      else { tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">' + escapeHtml((result && result.message) ? result.message : 'โหลดไม่สำเร็จ') + '</td></tr>'; }
+    })
+    .withFailureHandler(function(err) { tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">โหลดไม่สำเร็จ</td></tr>'; showToast('error', getErrorMessage(err)); })
+    .getUserList(currentToken);
+}
+
+/**
+ * renderUserTable()
+ * DESCRIPTION: สร้าง HTML แถวตารางผู้ใช้
+ *   - badge role (ADMIN ม่วง / STAFF เทา)
+ *   - badge status (ACTIVE เขียว / INACTIVE แดง)
+ *   - ซ่อนปุ่มลบของตัวเอง (กันลบตัวเอง)
+ */
+function renderUserTable(users) {
+  var tbody = document.getElementById('userTableBody');
+  if (!users || users.length === 0) { tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">ไม่พบผู้ใช้</td></tr>'; return; }
+  var html = '';
+  for (var i = 0; i < users.length; i++) {
+    var u = users[i];
+    var roleBadge = (u.Role === 'ADMIN') ? '<span class="badge badge-role-admin">ADMIN</span>' : '<span class="badge badge-role-staff">STAFF</span>';
+    var statusBadge = (u.Status === 'ACTIVE') ? '<span class="badge badge-success">ACTIVE</span>' : '<span class="badge badge-danger">INACTIVE</span>';
+    var isSelf = (currentUser && String(u.UserID) === String(currentUser.UserID));
+    html += '<tr class="table-row-anim" style="animation-delay:' + (i * 0.03) + 's">';
+    html += '<td><span class="code-text">' + escapeHtml(u.UserID) + '</span></td>';
+    html += '<td class="fw-medium">' + escapeHtml(u.Username) + (isSelf ? ' <span class="badge badge-role-admin" style="font-size:9px;">คุณ</span>' : '') + '</td>';
+    html += '<td>' + escapeHtml(u.DisplayName) + '</td>';
+    html += '<td>' + roleBadge + '</td>';
+    html += '<td>' + statusBadge + '</td>';
+    html += '<td>' + (u.LastLogin ? formatDate(u.LastLogin) : '<span class="text-muted">ยังไม่เคยเข้า</span>') + '</td>';
+    html += '<td class="text-center">';
+    html += '<button class="btn-icon btn-edit" title="แก้ไข" onclick="openUserModal(\'edit\', \'' + escapeHtml(u.UserID) + '\')"><i class="fas fa-pen-to-square"></i></button>';
+    if (!isSelf) {
+      html += '<button class="btn-icon btn-del" title="ลบ" onclick="confirmDeleteUser(\'' + escapeHtml(u.UserID) + '\', \'' + escapeHtml(u.Username).replace(/'/g, "\\'") + '\')"><i class="fas fa-trash-can"></i></button>';
+    } else {
+      html += '<button class="btn-icon" disabled title="ไม่สามารถลบบัญชีตัวเองได้" style="opacity:0.3;cursor:not-allowed;"><i class="fas fa-trash-can"></i></button>';
+    }
+    html += '</td></tr>';
+  }
+  tbody.innerHTML = html;
+}
+
+/**
+ * openUserModal()
+ * DESCRIPTION: เปิด Modal ฟอร์มผู้ใช้
+ *   - add: Username/Password/DisplayName/Role (บังคับ Password)
+ *   - edit: Username readonly, Password optional (เว้นว่าง=ไม่เปลี่ยน),
+ *           แสดงช่อง Status
+ */
+function openUserModal(mode, userId) {
+  var modal = document.getElementById('userModal');
+  var title = document.getElementById('userModalTitle');
+  document.getElementById('umUserId').value = '';
+  document.getElementById('umUsername').value = '';
+  document.getElementById('umUsername').readOnly = false;
+  document.getElementById('umPassword').value = '';
+  document.getElementById('umDisplayName').value = '';
+  document.getElementById('umRole').value = 'STAFF';
+  document.getElementById('umStatus').value = 'ACTIVE';
+
+  if (mode === 'edit' && userId) {
+    title.innerHTML = '<i class="fas fa-pen-to-square"></i> แก้ไขผู้ใช้';
+    var u = null;
+    for (var i = 0; i < cachedUsers.length; i++) { if (String(cachedUsers[i].UserID) === String(userId)) { u = cachedUsers[i]; break; } }
+    if (!u) { showToast('error', 'ไม่พบผู้ใช้ ' + userId); return; }
+    document.getElementById('umUserId').value = u.UserID;
+    document.getElementById('umUsername').value = u.Username;
+    document.getElementById('umUsername').readOnly = true; // ห้ามแก้ username
+    document.getElementById('umDisplayName').value = u.DisplayName;
+    document.getElementById('umRole').value = u.Role;
+    document.getElementById('umStatus').value = u.Status;
+    // Password optional ตอนแก้
+    document.getElementById('umPasswordLabel').innerHTML = 'รหัสผ่านใหม่';
+    document.getElementById('umPassword').placeholder = 'เว้นว่างไว้หากไม่ต้องการเปลี่ยน';
+    document.getElementById('umPasswordHint').style.display = 'flex';
+    document.getElementById('umStatusGroup').style.display = 'flex';
+  } else {
+    title.innerHTML = '<i class="fas fa-user-plus"></i> เพิ่มผู้ใช้ใหม่';
+    document.getElementById('umPasswordLabel').innerHTML = 'รหัสผ่าน <span class="req">*</span>';
+    document.getElementById('umPassword').placeholder = 'อย่างน้อย 6 ตัวอักษร';
+    document.getElementById('umPasswordHint').style.display = 'none';
+    document.getElementById('umStatusGroup').style.display = 'none';
+  }
+  modal.style.display = 'flex';
+  document.getElementById('umDisplayName').focus();
+}
+
+function closeUserModal() { document.getElementById('userModal').style.display = 'none'; }
+
+/**
+ * submitUser()
+ * DESCRIPTION: ตรวจสอบฟอร์มและส่งเพิ่ม/แก้ไขผู้ใช้
+ *   - add: บังคับ Username/Password/DisplayName
+ *   - edit: Password เว้นว่างได้
+ */
+function submitUser() {
+  var userId = document.getElementById('umUserId').value;
+  var username = document.getElementById('umUsername').value.trim();
+  var password = document.getElementById('umPassword').value;
+  var displayName = document.getElementById('umDisplayName').value.trim();
+  var role = document.getElementById('umRole').value;
+  var status = document.getElementById('umStatus').value;
+  var isEdit = (userId !== '');
+
+  if (!isEdit) {
+    if (!username) { showToast('warning', 'กรุณากรอก Username'); document.getElementById('umUsername').focus(); return; }
+    if (!password || password.length < 6) { showToast('warning', 'รหัสผ่านต้องอย่างน้อย 6 ตัวอักษร'); document.getElementById('umPassword').focus(); return; }
+  }
+  if (!displayName) { showToast('warning', 'กรุณากรอกชื่อที่แสดง'); document.getElementById('umDisplayName').focus(); return; }
+  if (!currentToken) { showToast('error', 'Session หมดอายุ กรุณา Login ใหม่'); return; }
+
+  var data = {
+    UserID: userId, Username: username, Password: password,
+    DisplayName: displayName, Role: role, Status: status
+  };
+
+  showLoading('กำลังบันทึกข้อมูลผู้ใช้...');
+  google.script.run
+    .withSuccessHandler(function(result) {
+      hideLoading();
+      if (result && result.success) {
+        showToast('success', result.message);
+        closeUserModal();
+        loadUsers();
+      } else { showToast('error', (result && result.message) ? result.message : 'บันทึกไม่สำเร็จ'); }
+    })
+    .withFailureHandler(function(err) { hideLoading(); showToast('error', 'บันทึกไม่สำเร็จ: ' + getErrorMessage(err)); })
+    .saveUserUnified(currentToken, data);
+}
+
+/**
+ * confirmDeleteUser()
+ * DESCRIPTION: ยืนยันลบผู้ใช้ (hard delete) - ไม่แสดงปุ่มลบตัวเองอยู่แล้ว
+ */
+function confirmDeleteUser(userId, username) {
+  Swal.fire({
+    title: 'ลบผู้ใช้นี้?',
+    html: 'ต้องการลบผู้ใช้ <b>' + escapeHtml(username) + '</b> (' + escapeHtml(userId) + ')<br><span style="color:#EF4444;font-size:13px;">การลบจะไม่สามารถกู้คืนได้</span>',
+    icon: 'warning', showCancelButton: true, confirmButtonColor: '#EF4444', cancelButtonColor: '#64748B',
+    confirmButtonText: 'ลบผู้ใช้', cancelButtonText: 'ยกเลิก'
+  }).then(function(result) {
+    if (result.isConfirmed) {
+      showLoading('กำลังลบผู้ใช้...');
+      google.script.run
+        .withSuccessHandler(function(res) { hideLoading(); if (res && res.success) { showToast('success', res.message); loadUsers(); } else { showToast('error', (res && res.message) ? res.message : 'ลบไม่สำเร็จ'); } })
+        .withFailureHandler(function(err) { hideLoading(); showToast('error', 'ลบไม่สำเร็จ: ' + getErrorMessage(err)); })
+        .deleteUser(currentToken, userId);
+    }
+  });
+}
+
+/* ============================================================
+   [STEP 7] SETTINGS
+   ============================================================ */
+
+/**
+ * loadSettings()
+ * DESCRIPTION: โหลดค่าตั้งค่ามาเติมฟอร์ม (ADMIN เท่านั้น)
+ */
+function loadSettings() {
+  if (!currentUser || currentUser.Role !== 'ADMIN') return;
+  google.script.run
+    .withSuccessHandler(function(result) {
+      if (result && result.success) {
+        var s = result.settings || {};
+        document.getElementById('setCompanyName').value = s.COMPANY_NAME || '';
+        document.getElementById('setCurrency').value = s.CURRENCY || 'THB';
+        document.getElementById('setLowStockAlert').value = (s.LOW_STOCK_ALERT === 'false') ? 'false' : 'true';
+        document.getElementById('setSessionTimeout').value = s.SESSION_TIMEOUT_HOURS || '8';
+      }
+    })
+    .withFailureHandler(function(err) { console.error('[loadSettings]', err); })
+    .getSettings(currentToken);
+}
+
+/**
+ * saveSettingsForm()
+ * DESCRIPTION: รวบรวมค่าจากฟอร์มและส่งบันทึก
+ */
+function saveSettingsForm() {
+  if (!currentToken) { showToast('error', 'Session หมดอายุ กรุณา Login ใหม่'); return; }
+  var timeout = parseInt(document.getElementById('setSessionTimeout').value, 10);
+  if (isNaN(timeout) || timeout < 1 || timeout > 6) {
+    showToast('warning', 'Session หมดอายุต้องอยู่ระหว่าง 1-6 ชั่วโมง');
+    document.getElementById('setSessionTimeout').focus();
+    return;
+  }
+  var data = {
+    COMPANY_NAME: document.getElementById('setCompanyName').value.trim(),
+    CURRENCY: document.getElementById('setCurrency').value,
+    LOW_STOCK_ALERT: document.getElementById('setLowStockAlert').value,
+    SESSION_TIMEOUT_HOURS: String(timeout)
+  };
+  showLoading('กำลังบันทึกการตั้งค่า...');
+  google.script.run
+    .withSuccessHandler(function(result) {
+      hideLoading();
+      if (result && result.success) { showToast('success', result.message); }
+      else { showToast('error', (result && result.message) ? result.message : 'บันทึกไม่สำเร็จ'); }
+    })
+    .withFailureHandler(function(err) { hideLoading(); showToast('error', 'บันทึกไม่สำเร็จ: ' + getErrorMessage(err)); })
+    .saveSettings(currentToken, data);
+}
+
+/* ============================================================
+   [STEP 7] EXPORT CSV
+   ============================================================ */
+
+/**
+ * exportStock()
+ * DESCRIPTION: ส่งออกสต็อกปัจจุบันเป็น CSV → ดาวน์โหลด
+ */
+function exportStock() {
+  if (!currentToken) { showToast('error', 'Session หมดอายุ'); return; }
+  showLoading('กำลังเตรียมไฟล์ CSV...');
+  google.script.run
+    .withSuccessHandler(function(result) {
+      hideLoading();
+      if (result && result.success) { downloadCSV(result.csv, result.filename); showToast('success', 'ดาวน์โหลดไฟล์สำเร็จ'); }
+      else { showToast('error', (result && result.message) ? result.message : 'ส่งออกไม่สำเร็จ'); }
+    })
+    .withFailureHandler(function(err) { hideLoading(); showToast('error', 'ส่งออกไม่สำเร็จ: ' + getErrorMessage(err)); })
+    .exportStockCSV(currentToken);
+}
+
+/**
+ * exportHistory()
+ * DESCRIPTION: ส่งออกประวัติตามตัวกรองปัจจุบันเป็น CSV → ดาวน์โหลด
+ */
+function exportHistory() {
+  if (!currentToken) { showToast('error', 'Session หมดอายุ'); return; }
+  var filter = {
+    type: document.getElementById('histType').value,
+    dateFrom: document.getElementById('histDateFrom').value,
+    dateTo: document.getElementById('histDateTo').value,
+    keyword: document.getElementById('histKeyword').value.trim()
+  };
+  showLoading('กำลังเตรียมไฟล์ CSV...');
+  google.script.run
+    .withSuccessHandler(function(result) {
+      hideLoading();
+      if (result && result.success) { downloadCSV(result.csv, result.filename); showToast('success', 'ดาวน์โหลดไฟล์สำเร็จ'); }
+      else { showToast('error', (result && result.message) ? result.message : 'ส่งออกไม่สำเร็จ'); }
+    })
+    .withFailureHandler(function(err) { hideLoading(); showToast('error', 'ส่งออกไม่สำเร็จ: ' + getErrorMessage(err)); })
+    .exportHistoryCSV(currentToken, filter);
+}
+
+/**
+ * downloadCSV()
+ * DESCRIPTION: [สำคัญ] สร้าง Blob CSV + BOM (\uFEFF) แล้ว trigger ดาวน์โหลด
+ *   ⚠️ BOM จำเป็นเพื่อให้ Excel เปิดภาษาไทยไม่เพี้ยน (UTF-8)
+ *   ใช้ URL.createObjectURL + <a download> (ไม่ต้องขอ permission Drive)
+ *
+ * @param {string} csvString - เนื้อหา CSV จาก backend
+ * @param {string} filename - ชื่อไฟล์
+ */
+function downloadCSV(csvString, filename) {
+  try {
+    var blob = new Blob(['\uFEFF' + csvString], { type: 'text/csv;charset=utf-8;' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = filename || 'export.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function() { URL.revokeObjectURL(url); }, 1000);
+  } catch (e) {
+    console.error('[downloadCSV] error:', e);
+    showToast('error', 'ดาวน์โหลดไม่สำเร็จ: ' + e.message);
+  }
+}
+
+/* UI UTILITIES */
+function showLoading(message) { var o = document.getElementById('loadingOverlay'); o.querySelector('.loading-text').textContent = message || 'กำลังประมวลผล...'; o.style.display = 'flex'; }
+function hideLoading() { document.getElementById('loadingOverlay').style.display = 'none'; }
+function showToast(type, message) { Toast.fire({ icon: type, title: message }); }
+function formatCurrency(amount) { var n = parseFloat(amount) || 0; return '฿' + n.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+function formatNumber(num) { return (parseInt(num) || 0).toLocaleString('th-TH'); }
+function formatDate(dateStr) {
+  if (!dateStr) return '-';
+  var d = new Date(dateStr);
+  if (isNaN(d.getTime())) return dateStr;
+  var months = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  return d.getDate() + ' ' + months[d.getMonth()] + ' ' + (d.getFullYear() + 543) + ' ' + ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2);
+}
+function getErrorMessage(err) {
+  console.error('[GAS FailureHandler] Full error object:', err);
+  if (!err) return 'เกิดข้อผิดพลาด (ไม่ทราบสาเหตุ)';
+  if (typeof err === 'string') return err;
+  if (err.message) return err.message;
+  if (err.details) return err.details;
+  try { return JSON.stringify(err); } catch (e) { return 'เกิดข้อผิดพลาดที่ไม่สามารถอ่านได้'; }
+}
+function escapeHtml(text) {
+  if (text === null || text === undefined) return '';
+  return String(text).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+}
+
+/* KEYBOARD SHORTCUTS */
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') { var lv = document.getElementById('loginView'); if (lv.style.display !== 'none') { doLogin(); } }
+  if (e.key === 'Escape') {
+    if (document.getElementById('productModal').style.display === 'flex') { closeProductModal(); }
+    if (document.getElementById('userModal').style.display === 'flex') { closeUserModal(); }
+  }
+});
+</script>
